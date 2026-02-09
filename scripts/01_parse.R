@@ -176,9 +176,11 @@ cli::cli_alert_success("Parsed {nrow(articles_df)} articles from {length(docx_fi
 # --- 2. Detect and remove near-duplicates -------------------------------------
 
 # lnt_similarity() is too memory-intensive for 8000+ articles.
-# Instead, use a two-pass approach:
+# Instead, use a three-pass approach:
 #   Pass 1: Remove exact duplicates (same headline + date + source)
 #   Pass 2: Flag near-duplicate headlines on the same date using string distance
+#   Pass 3: Flag syndicated/cross-published articles (same date + same body text,
+#           possibly different headlines and sources)
 
 cli::cli_alert_info("Checking for duplicate articles...")
 
@@ -229,7 +231,35 @@ if (length(near_dup_indices) > 0) {
     filter(!row_number() %in% near_dup_indices)
 }
 
-cli::cli_alert_info("After deduplication: {nrow(articles_df)} articles remain (removed {n_before - nrow(articles_df)} total)")
+cli::cli_alert_info("After headline dedup: {nrow(articles_df)} articles remain")
+
+# Pass 3: Syndicated / cross-published articles — same body text, different
+# headlines/sources. We compare the first 300 lowercased characters of the body
+# within each date group. This catches wire stories republished by multiple
+# outlets with different headlines.
+
+n_before_body <- nrow(articles_df)
+
+articles_df <- articles_df |>
+  mutate(
+    .body_key = str_to_lower(str_sub(str_trim(Article), 1, 300))
+  ) |>
+  # Keep only articles with enough body text to compare (>50 chars)
+  mutate(.has_body = !is.na(.body_key) & nchar(.body_key) >= 50) |>
+  group_by(Date, .body_key) |>
+  # Within each group: if body is long enough to compare, keep only the first;
+
+  # if body is too short, keep all (can't reliably dedup)
+  filter(!.has_body | row_number() == 1) |>
+  ungroup() |>
+  select(-.body_key, -.has_body)
+
+n_body_dups <- n_before_body - nrow(articles_df)
+if (n_body_dups > 0) {
+  cli::cli_alert_warning("Removed {n_body_dups} syndicated duplicate articles (same date + body text)")
+}
+
+cli::cli_alert_info("After all deduplication: {nrow(articles_df)} articles remain (removed {n_before - nrow(articles_df)} total)")
 
 # --- 3. Map fields to schema -------------------------------------------------
 
