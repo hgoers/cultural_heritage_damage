@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/chev-article-damage-event.schema.json",
+  "title": "Cultural Heritage Event Dataset (CHEV) - Article-Damage Event Version",
+  "description": "Dataset recording newspaper articles that report damage to cultural heritage sites in countries experiencing armed conflict or unrest. The unit of observation is a newspaper article-damage event pair. If a single article mentions multiple sites or multiple instances of damage to a single site, each reported damage event receives its own entry with a reference to the source article.",
+  "type": "object",
+  "properties": {
+    "record_id": {
+      "type": "string",
+      "description": "Unique ID for each article-damage event record in the dataset",
+      "pattern": "^[A-Z]+_[0-9]+$"
+    },
+    "article_id": {
+      "type": "string",
+      "description": "Unique ID for each newspaper article",
+      "pattern": "^[A-Z]+_[0-9]+$"
+    },    
+    "article_date": {
+      "type": "string",
+      "description": "Publication date of the newspaper article (in YYYY-MM-DD format)",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "article_source": {
+      "type": "string",
+      "description": "Name of the news source/publication (e.g., The Guardian, Reuters, New York Times)"
+    },
+    "article_headline": {
+      "type": "string",
+      "description": "Headline of the newspaper article"
+    },
+    "article_excerpt": {
+      "type": ["string", "null"],
+      "description": "Relevant excerpt from the article that describes the damage event(s)"
+    },
+    "year": {
+      "type": "integer",
+      "description": "Calendar year the damage was reported to have occurred (may differ from article publication year)",
+      "minimum": 1900,
+      "maximum": 2100
+    },
+    "event_date_start": {
+      "type": ["string", "null"],
+      "description": "Start date of the reported damage event as mentioned in the article (in YYYY-MM-DD format). If no start date can be identified, null",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "event_date_end": {
+      "type": ["string", "null"],
+      "description": "End date of the reported damage event as mentioned in the article (in YYYY-MM-DD format). If no end date can be identified, null",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "temp_prec": {
+      "type": "integer",
+      "description": "Precision code for damage event date as reported in article. 0 = not applicable (summary event); 1 = exact day known; 2 = time period 2-6 days; 3 = week only; 4 = month only; 5 = year only",
+      "enum": [0, 1, 2, 3, 4, 5]
+    },
+    "event_latitude": {
+      "type": ["number", "null"],
+      "description": "Latitude coordinate of the reported damaged site in decimal format",
+      "minimum": -90,
+      "maximum": 90
+    },
+    "event_longitude": {
+      "type": ["number", "null"],
+      "description": "Longitude coordinate of the reported damaged site in decimal format",
+      "minimum": -180,
+      "maximum": 180
+    },
+    "geo_prec": {
+      "type": "integer",
+      "description": "Precision code for damage event location as can be determined from article. 1 = exact site; 2 = village/city; 3 = second order admin division (ADM2); 4 = first order admin division (ADM1); 5 = section of country; 6 = whole country; 7 = coordinates at sea/water",
+      "enum": [1, 2, 3, 4, 5, 6, 7]
+    },
+    "site_name": {
+      "type": "string",
+      "description": "Name of the cultural heritage site as mentioned in the article"
+    },
+    "site_type": {
+      "type": "integer",
+      "description": "The type of the site that was damaged. 1 = place of worship; 2 = library; 3 = museum; 4 = archive; 5 = monument; 6 = statue; 7 = sculpture; 8 = place of burial; 9 = archeological site; 10 = garden; 11 = opera/theatre; 12 = house of culture; 13 = gallery; 14 = zoo; 15 = monastery/seminary/convent; 16 = memorial; 17 = art/music school; 18 = other",
+      "enum": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+    },
+    "place_of_worship": {
+      "type": ["integer", "null"],
+      "description": "If site_type is 1 (place of worship), specify the type. 1 = mosque; 2 = church; 3 = synagogue; 4 = cathedral; 5 = temple; 6 = chapel",
+      "enum": [1, 2, 3, 4, 5, 6, null]
+    },
+    "place_of_burial": {
+      "type": ["integer", "null"],
+      "description": "If site_type is 8 (place of burial), specify the type. 1 = shrine; 2 = mausoleum; 3 = tomb; 4 = grave",
+      "enum": [1, 2, 3, 4, null]
+    },
+    "other_site_type": {
+      "type": ["string", "null"],
+      "description": "If site_type is 18 (other), describe the type of site as mentioned in the article"
+    },
+    "initiator": {
+      "type": ["string", "null"],
+      "description": "The perpetrating party as named in the article (e.g., U.S. military, Iraqi army, ISIS, Russian forces, Ukrainian forces)"
+    },
+    "group_at_site": {
+      "type": ["string", "null"],
+      "description": "The group present at the site when the event took place as mentioned in the article. Can be an armed or civilian group (e.g., worshippers, protestors, congregation, tourists, locals, civilians)"
+    },
+    "damage_type": {
+      "type": ["string", "null"],
+      "description": "Damage type as reported in article. 1 = fire; 2 = explosion (bomb, explosive detonation); 3 = shelling (artillery fire, bullet); 4 = airstrike; 5 = rocket fire; 6 = looting/stealing; 7 = deface/desecrate/vandalize; 8 = occupied/barricaded; 9 = other. Multiple types separated by pipe (|) if article reports multiple damage types",
+      "pattern": "^[1-9](\\|[1-9])*$|^[1-9]$"
+    },
+    "other_damage_type": {
+      "type": ["string", "null"],
+      "description": "If damage_type is 9 (other), describe the type of damage as mentioned in the article"
+    },
+    "site_dmg_smry": {
+      "type": ["string", "null"],
+      "description": "Summary description of site damage as reported in article (e.g., 'set ablaze', 'bombed', 'damaged', 'pillaged')"
+    },
+    "site_dmg_full": {
+      "type": ["string", "null"],
+      "description": "Full description of site damage from the article. Should be complete sentence(s) copied from the article containing the site_dmg_smry phrase"
+    },
+    "reported_source": {
+      "type": ["string", "null"],
+      "description": "The source cited in the article for the damage information (e.g., human rights activist, eyewitness, local official, military spokesperson). Not all articles will identify a source"
+    },
+    "country": {
+      "type": "string",
+      "description": "Name of the country in which the site is located"
+    },
+    "verification_quality": {
+      "type": ["integer", "null"],
+      "description": "Assessment of article's verification quality. 1 = minimal sourcing/verification; 2 = moderate sourcing; 3 = strong sourcing with multiple independent sources; 4 = investigative/in-depth verification",
+      "enum": [1, 2, 3, 4, null]
+    },
+    "notes": {
+      "type": ["string", "null"],
+      "description": "Additional notes or comments about the article or coding decisions"
+    },
+    "coding_date": {
+      "type": ["string", "null"],
+      "description": "Date when this article was coded",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    }
+  },
+  "required": [
+    "record_id",
+    "article_id",
+    "article_date",
+    "article_source",
+    "article_headline",
+    "site_name",
+    "site_type",
+    "country",
+    "temp_prec",
+    "geo_prec"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "site_type": {
+            "const": 1
+          }
+        }
+      },
+      "then": {
+        "required": ["place_of_worship"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "site_type": {
+            "const": 8
+          }
+        }
+      },
+      "then": {
+        "required": ["place_of_burial"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "site_type": {
+            "const": 18
+          }
+        }
+      },
+      "then": {
+        "required": ["other_site_type"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "damage_type": {
+            "const": "9"
+          }
+        }
+      },
+      "then": {
+        "required": ["other_damage_type"]
+      }
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "site_types": {
+      "description": "Human-readable labels for site type codes",
+      "enum": [
+        "place_of_worship",
+        "library",
+        "museum",
+        "archive",
+        "monument",
+        "statue",
+        "sculpture",
+        "place_of_burial",
+        "archeological_site",
+        "garden",
+        "opera_theatre",
+        "house_of_culture",
+        "gallery",
+        "zoo",
+        "monastery_seminary_convent",
+        "memorial",
+        "art_music_school",
+        "other"
+      ]
+    },
+    "damage_types": {
+      "description": "Human-readable labels for damage type codes",
+      "enum": [
+        "fire",
+        "explosion",
+        "shelling",
+        "airstrike",
+        "rocket_fire",
+        "looting_stealing",
+        "deface_desecrate_vandalize",
+        "occupied_barricaded",
+        "other"
+      ]
+    },
+    "temporal_precision": {
+      "description": "Human-readable labels for temporal precision codes",
+      "enum": [
+        "not_applicable",
+        "exact_day",
+        "2_to_6_days",
+        "week",
+        "month",
+        "year"
+      ]
+    },
+    "geographic_precision": {
+      "description": "Human-readable labels for geographic precision codes",
+      "enum": [
+        "exact_site",
+        "village_city",
+        "adm2_district",
+        "adm1_province",
+        "country_section",
+        "whole_country",
+        "at_sea_water"
+      ]
+    }
+  }
+}

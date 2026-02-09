@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/chev-articles.schema.json",
+  "title": "Cultural Heritage Event Dataset (CHEV) - Article-Based Version",
+  "description": "Dataset recording newspaper articles that potentially report damage to cultural heritage sites in countries experiencing armed conflict or unrest. The unit of observation is a newspaper article. The dataset includes metadata about the article (e.g., publication date, source) and the full text of the article body.",
+  "type": "object",
+  "properties": {
+    "article_id": {
+      "type": "string",
+      "description": "Unique ID for each newspaper article",
+      "pattern": "^[A-Z]+_[0-9]+$"
+    },
+    "article_date": {
+      "type": "string",
+      "description": "Publication date of the newspaper article (in YYYY-MM-DD format)",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "article_source": {
+      "type": "string",
+      "description": "Name of the news source/publication (e.g., The Guardian, Reuters, New York Times)"
+    },
+    "article_headline": {
+      "type": "string",
+      "description": "Headline of the newspaper article"
+    },
+    "article_body": {
+      "type": ["string", "null"],
+      "description": "The entire text of the body of the newspaper article"
+    }
+  },
+  "required": [
+    "article_id",
+    "article_date",
+    "article_source",
+    "article_headline",
+    "article_body"
+  ]
+}
