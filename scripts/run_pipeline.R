@@ -11,7 +11,6 @@
 # Pipeline steps:
 #   1  Parse & clean DOCX files          → data/01_articles.json
 #   2  Classify relevant articles        → data/02_articles_filtered.json
-#  2b  Retry failed classifications      → updates 02_* files
 #   3  Extract damage event details      → data/03_article_damage_events.json
 #  3b  Geocode locations                 → updates 03_article_damage_events.json
 #   4  Deduplicate to unique events      → data/04_damage_events.json
@@ -47,7 +46,7 @@ if ("--skip-review" %in% args) skip_review <- TRUE
 # ==============================================================================
 #
 # Each step declares:
-#   step     Numeric ID (supports decimals for sub-steps: 2.5 = 2b, 3.5 = 3b)
+#   step     Numeric ID (supports decimals for sub-steps: 3.5 = 3b)
 #   label    Short label for display (used with --from / --only)
 #   name     Human-readable description
 #   script   Path to R script
@@ -70,14 +69,6 @@ steps <- list(
     script  = file.path("scripts", "02_classify.R"),
     output  = file.path(paths$data, "02_articles_filtered.json"),
     depends = file.path(paths$data, "01_articles.json")
-  ),
-  list(
-    step    = 2L,
-    label   = "2b",
-    name    = "Retry failed classifications",
-    script  = file.path("scripts", "02b_retry_failures.R"),
-    output  = file.path(paths$data, "02_articles_filtered.json"),
-    depends = file.path(paths$data, "02_classification_log.json")
   ),
   list(
     step    = 3L,
@@ -228,7 +219,7 @@ for (s in run_steps) {
   }
 
   # Human review checkpoints
-  if (s$label == "2b") {
+  if (s$label == "2") {
     prompt_review("2", file.path(paths$data, "02_review_needed.json"))
   }
   if (s$label == "4") {

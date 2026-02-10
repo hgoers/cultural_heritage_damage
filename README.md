@@ -79,7 +79,7 @@ Shared configuration sourced by all pipeline scripts:
 3. **Added exclusions** for threat/risk-only articles, broad non-specific references, and regional damage without specific sites named.
 4. **Human review via Shiny dashboard** (`scripts/review_dashboard.R`): 46 borderline decisions were manually reviewed, and patterns identified led to four additional exclusions — aggregate statistics, exhibition/artist profiles, government monument modifications (decommunization), and unnamed sites.
 
-**Retry mechanism** (`scripts/02b_retry_failures.R`): Any articles that fail classification due to API errors are retried up to 3 times with a 5-second delay between attempts.
+**Retry mechanism**: Any articles that fail classification due to API errors are automatically retried up to 3 times with a 5-second delay between attempts, within the same script run.
 
 **Test mode**: Setting `TEST_N=100` samples 100 articles for rapid iteration (seed = 789 for reproducibility).
 
@@ -226,8 +226,7 @@ cultural_heritage_damage/
 ├── scripts/
 │   ├── 00_setup.R                  # Shared config and utilities
 │   ├── 01_parse.R                  # Step 1: DOCX parsing
-│   ├── 02_classify.R               # Step 2: LLM classification
-│   ├── 02b_retry_failures.R        # Step 2b: Retry failed classifications
+│   ├── 02_classify.R               # Step 2: LLM classification (includes retry)
 │   ├── 03_extract.R                # Step 3: LLM extraction
 │   ├── 04_deduplicate.R            # Step 4: Deduplication and merging
 │   ├── 05_geocode.R                # Step 3b: Geocoding

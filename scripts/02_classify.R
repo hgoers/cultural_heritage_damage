@@ -1,5 +1,6 @@
 # 02_classify.R
 # Step 2: Classify articles as relevant (reporting cultural heritage damage) or not.
+# Includes automatic retry of any failed classifications (up to MAX_RETRIES).
 #
 # Input:  data/01_articles.json
 # Output: data/02_articles_filtered.json (same schema, filtered)
@@ -15,6 +16,10 @@ library(ellmer)
 
 # Model: Haiku 3.5 — sufficient for binary classification, cost-effective
 classify_model <- "claude-3-5-haiku-20241022"
+
+# Retry configuration for failed classifications
+MAX_RETRIES <- 3
+RETRY_DELAY <- 5 # seconds between retry passes
 
 # Allow running on a subset for testing (set TEST_N env var or edit here)
 test_n <- as.integer(Sys.getenv("TEST_N", unset = NA))
@@ -188,7 +193,91 @@ if (".error" %in% names(classification_log)) {
   }
 }
 
-# --- 7. Summary statistics ----------------------------------------------------
+# --- 7. Retry failed classifications -----------------------------------------
+
+n_failed <- sum(is.na(classification_log$reports_damage))
+
+if (n_failed > 0) {
+  cli::cli_h3("Retrying {n_failed} failed classifications (up to {MAX_RETRIES} attempts)")
+
+  # Load full articles for failed IDs
+  failed_ids <- classification_log |>
+    filter(is.na(reports_damage)) |>
+    pull(article_id)
+
+  articles_all_for_retry <- fromJSON(file.path(paths$data, "01_articles.json"))
+  remaining <- articles_all_for_retry |>
+    filter(article_id %in% failed_ids)
+
+  for (attempt in seq_len(MAX_RETRIES)) {
+    n_remaining <- nrow(remaining)
+    if (n_remaining == 0) break
+
+    cli::cli_alert_info("Retry attempt {attempt}/{MAX_RETRIES}: {n_remaining} articles")
+
+    if (attempt > 1) {
+      cli::cli_alert_info("Waiting {RETRY_DELAY}s before retry...")
+      Sys.sleep(RETRY_DELAY)
+    }
+
+    retry_prompts <- as.list(paste0(
+      "Article ID: ", remaining$article_id, "\n",
+      "Headline: ", remaining$article_headline, "\n\n",
+      "Article text (may be truncated):\n",
+      str_sub(remaining$article_body, 1, 2000)
+    ))
+
+    retry_results <- parallel_chat_structured(
+      chat = chat,
+      prompts = retry_prompts,
+      type = classification_type,
+      convert = FALSE,
+      max_active = 5,   # lower concurrency for retries
+      rpm = 300,
+      on_error = "continue"
+    )
+
+    retry_tbl <- tibble(
+      article_id = remaining$article_id,
+      reports_damage = map_lgl(retry_results, \(x) tryCatch(x$reports_damage, error = \(e) NA)),
+      confidence = map_chr(retry_results, \(x) tryCatch(x$confidence, error = \(e) NA_character_)),
+      reasoning = map_chr(retry_results, \(x) tryCatch(x$reasoning, error = \(e) NA_character_))
+    )
+
+    n_succeeded <- sum(!is.na(retry_tbl$reports_damage))
+    n_still_failed <- sum(is.na(retry_tbl$reports_damage))
+    cli::cli_alert_info("Attempt {attempt}: {n_succeeded} succeeded, {n_still_failed} still failed")
+
+    # Merge successful retries into classification_log
+    succeeded <- retry_tbl |> filter(!is.na(reports_damage))
+
+    if (nrow(succeeded) > 0) {
+      for (i in seq_len(nrow(succeeded))) {
+        idx <- which(classification_log$article_id == succeeded$article_id[i])
+        classification_log$reports_damage[idx] <- succeeded$reports_damage[i]
+        classification_log$confidence[idx] <- succeeded$confidence[i]
+        classification_log$reasoning[idx] <- succeeded$reasoning[i]
+      }
+    }
+
+    # Update remaining to only those still failed
+    still_failed_ids <- retry_tbl |>
+      filter(is.na(reports_damage)) |>
+      pull(article_id)
+
+    remaining <- remaining |> filter(article_id %in% still_failed_ids)
+  }
+
+  n_recovered <- n_failed - sum(is.na(classification_log$reports_damage))
+  cli::cli_alert_success("Recovered {n_recovered}/{n_failed} previously failed articles")
+  if (sum(is.na(classification_log$reports_damage)) > 0) {
+    cli::cli_alert_warning("{sum(is.na(classification_log$reports_damage))} articles still failed after {MAX_RETRIES} retry attempts")
+  }
+} else {
+  cli::cli_alert_success("All articles classified successfully — no retries needed")
+}
+
+# --- 8. Summary statistics ----------------------------------------------------
 
 cli::cli_h3("Classification Summary")
 
@@ -222,7 +311,7 @@ for (i in seq_len(nrow(conf_counts))) {
   cli::cli_alert("  damage={conf_counts$reports_damage[i]}, confidence={conf_counts$confidence[i]}: {conf_counts$n[i]}")
 }
 
-# --- 8. Write outputs ---------------------------------------------------------
+# --- 9. Write outputs ---------------------------------------------------------
 
 # 8a. Full classification log (all articles with classification metadata)
 log_path <- file.path(paths$data, "02_classification_log.json")
@@ -266,7 +355,7 @@ write(
 )
 cli::cli_alert_success("Wrote {nrow(articles_filtered)} relevant articles to {.file {filtered_path}}")
 
-# --- 9. Print sample of relevant articles for verification --------------------
+# --- 10. Print sample of relevant articles for verification -------------------
 
 cli::cli_h3("Sample relevant articles")
 relevant_sample <- classification_log |>
