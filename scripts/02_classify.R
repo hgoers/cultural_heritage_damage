@@ -28,7 +28,7 @@ cli::cli_alert_info("Loaded {nrow(articles)} articles from Step 1")
 
 # Subsample if TEST_N is set
 if (!is.na(test_n) && test_n < nrow(articles)) {
-  set.seed(123)
+  set.seed(789)
   sample_idx <- sample(nrow(articles), test_n)
   articles <- articles[sample_idx, ]
   cli::cli_alert_warning("TEST MODE: Processing {nrow(articles)} randomly sampled articles")
@@ -86,15 +86,33 @@ system_prompt <- paste0(
   "Ukraine (e.g., 'hundreds of cultural sites have been damaged', 'museums across ",
   "Ukraine are being destroyed') without naming or identifying at least one specific ",
   "site that was damaged\n",
+  "- Cites aggregate damage figures from external sources (e.g., 'UNESCO reports ",
+  "230 cultural sites damaged', 'an estimated 210,000 buildings destroyed') without ",
+  "reporting on a specific, named damage event at an identifiable site. Statistics ",
+  "alone — even authoritative ones — do not constitute a report of a specific ",
+  "damage instance\n",
   "- Reports destruction NEAR a cultural heritage site but does not state that ",
   "the site itself was damaged (e.g., a missile hit near a cathedral, fighting ",
   "occurred close to a museum)\n",
   "- Mentions damage to a town, city, or region that contains cultural heritage ",
   "sites but does not specifically report damage to a heritage site itself (e.g., ",
-  "'Odesa was bombed' without mentioning damage to a specific heritage site in Odesa)\n\n",
+  "'Odesa was bombed' without mentioning damage to a specific heritage site in Odesa)\n",
+  "- Is primarily an art exhibition review, artist profile, architecture ",
+  "criticism, or cultural commentary piece that only references heritage damage ",
+  "as incidental background context. The article must be *reporting on* a damage ",
+  "event, not merely referencing one in passing\n",
+  "- Describes intentional government decisions to modify, remove, relocate, or ",
+  "rename monuments or heritage sites (e.g., decommunization, de-Russification ",
+  "policy). Only damage caused by military action or deliberate destruction by an ",
+  "adversary qualifies\n",
+  "- Mentions damage to a heritage site but does not provide enough information ",
+  "to identify which specific site was damaged (e.g., 'a museum was destroyed' ",
+  "without naming it, or a garbled transcript referencing an unnamed institution). ",
+  "The site must be identifiable by name, description, or location\n\n",
   "KEY PRINCIPLE: The article must report that a specific, identifiable cultural ",
   "heritage site has already suffered physical damage. Threats, risks, proximity, ",
-  "aggregate statistics, and regional damage alone are not sufficient."
+  "aggregate statistics, regional damage, exhibition reviews, government-initiated ",
+  "monument changes, and unnamed sites are not sufficient."
 )
 
 # --- 3. Set up ellmer chat and type -------------------------------------------

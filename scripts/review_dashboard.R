@@ -101,7 +101,7 @@ n_articles <- nrow(review_data)
 # --- Load any prior decisions -------------------------------------------------
 
 load_decisions <- function() {
-  if (file.exists(decisions_path)) {
+  if (file.exists(decisions_path) && file.size(decisions_path) > 0) {
     fromJSON(decisions_path) |> as_tibble()
   } else {
     tibble(article_id = character(), decision = character())
