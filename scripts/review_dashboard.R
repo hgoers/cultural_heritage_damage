@@ -96,6 +96,22 @@ review_data <- review_data |>
   ) |>
   arrange(sort_key, article_id)
 
+# Compute review reason for each article
+review_data <- review_data |>
+  mutate(
+    review_reason = case_when(
+      is.na(reports_damage) ~ "Classification failed",
+      confidence == "low" ~ "The LLM has low confidence in its assessment",
+      human_assessment == "Disagreement" ~ "The humans disagree with each other",
+      (human_assessment == "Relevant" & reports_damage == FALSE) |
+        (human_assessment == "Not relevant" & reports_damage == TRUE) ~
+        "The LLM and the humans disagree",
+      reports_damage == TRUE & confidence == "medium" ~
+        "The LLM has medium confidence (no human review available)",
+      TRUE ~ "Flagged for review"
+    )
+  )
+
 n_articles <- nrow(review_data)
 
 # --- Load any prior decisions -------------------------------------------------
@@ -190,8 +206,32 @@ ui <- page_sidebar(
   sidebar = sidebar(
     width = 320,
     h5("Navigation"),
-    p(class = "text-muted small", textOutput("progress_text")),
+    p(class = "fw-bold mt-0", textOutput("article_position_text")),
 
+    # Decision buttons
+    h5("Your Decision"),
+    layout_columns(
+      col_widths = c(6, 6),
+      actionButton("mark_relevant", "\u2713 Relevant",
+        class = "btn-success btn-sm w-100"),
+      actionButton("mark_irrelevant", "\u2717 Not Relevant",
+        class = "btn-danger btn-sm w-100")
+    ),
+    actionButton("clear_decision", "Clear Decision",
+      class = "btn-outline-secondary btn-sm w-100 mt-2"),
+
+    hr(),
+
+    # Navigation buttons
+    layout_columns(
+      col_widths = c(6, 6),
+      actionButton("prev_btn", "\u25c0 Prev", class = "btn-outline-primary btn-sm w-100"),
+      actionButton("next_btn", "Next \u25b6", class = "btn-outline-primary btn-sm w-100")
+    ),
+
+    hr(),
+
+    p(class = "text-muted small mb-0", textOutput("progress_text")),
     # Filter controls
     selectInput("filter_status", "Filter by review status",
       choices = c("All", "Unreviewed", "Relevant", "Not relevant"),
@@ -210,87 +250,78 @@ ui <- page_sidebar(
     hr(),
 
     # Article selector
-    uiOutput("article_selector_ui"),
-
-    hr(),
-
-    # Navigation buttons
-    layout_columns(
-      col_widths = c(6, 6),
-      actionButton("prev_btn", "\u25c0 Prev", class = "btn-outline-primary btn-sm w-100"),
-      actionButton("next_btn", "Next \u25b6", class = "btn-outline-primary btn-sm w-100")
-    ),
-
-    hr(),
-
-    # Decision buttons
-    h5("Your Decision"),
-    layout_columns(
-      col_widths = c(6, 6),
-      actionButton("mark_relevant", "\u2713 Relevant",
-        class = "btn-success btn-sm w-100"),
-      actionButton("mark_irrelevant", "\u2717 Not Relevant",
-        class = "btn-danger btn-sm w-100")
-    ),
-    actionButton("clear_decision", "Clear Decision",
-      class = "btn-outline-secondary btn-sm w-100 mt-2"),
-
-    hr(),
-    actionButton("save_btn", "Save & Update Files",
-      class = "btn-primary w-100",
-      icon = icon("floppy-disk"))
+    uiOutput("article_selector_ui")
   ),
 
   # Main content
   layout_columns(
     col_widths = c(12),
 
-    # Header card with metadata
-    card(
-      card_header(
-        class = "d-flex justify-content-between align-items-center",
-        textOutput("article_id_text"),
-        uiOutput("decision_badge")
+    # Top row: review reason + AI reasoning (left) + assessments (right)
+    layout_columns(
+      col_widths = c(8, 4),
+
+      # Review reason + AI reasoning
+      card(
+        card_header(
+          class = "d-flex justify-content-between align-items-center",
+          uiOutput("review_reason_ui"),
+          uiOutput("decision_badge")
+        ),
+        card_body(
+          div(
+            class = "bg-light rounded p-3",
+            tags$strong(class = "d-block mb-1 text-muted small", "AI Reasoning"),
+            textOutput("reasoning_text")
+          )
+        )
       ),
-      card_body(
-        layout_columns(
-          col_widths = c(8, 4),
-          # Left: headline + metadata
+
+      # Assessment card
+      card(
+        card_header("Assessments"),
+        card_body(
+          class = "p-2",
           div(
-            h4(textOutput("headline_text")),
-            layout_columns(
-              col_widths = c(4, 4, 4),
-              div(tags$strong("Date: "), textOutput("date_text", inline = TRUE)),
-              div(tags$strong("Source: "), textOutput("source_text", inline = TRUE)),
-              div(tags$strong("AI Confidence: "), uiOutput("confidence_ui", inline = TRUE))
-            )
+            class = "d-flex justify-content-between align-items-center py-1 border-bottom",
+            tags$strong(class = "small", "AI Confidence"),
+            uiOutput("confidence_ui")
           ),
-          # Right: assessments
           div(
-            class = "text-end",
-            div(class = "mb-2", tags$strong("AI: "), uiOutput("ai_badge_ui", inline = TRUE)),
-            div(class = "mb-2", tags$strong("Human: "), uiOutput("human_badge_ui", inline = TRUE)),
-            div(class = "small text-muted", textOutput("human_detail_text"))
+            class = "d-flex justify-content-between align-items-center py-1 border-bottom",
+            tags$strong(class = "small", "AI Assessment"),
+            uiOutput("ai_badge_ui")
+          ),
+          div(
+            class = "d-flex justify-content-between align-items-center py-1",
+            tags$strong(class = "small", "Human Assessment"),
+            div(
+              class = "text-end",
+              uiOutput("human_badge_ui"),
+              div(class = "small text-muted", textOutput("human_detail_text"))
+            )
           )
         )
       )
     ),
 
-    # AI reasoning
+    # Article
     card(
-      card_header("AI Reasoning"),
+      card_header(h4(class = "mb-0", textOutput("headline_text", inline = TRUE))),
       card_body(
-        class = "bg-light",
-        textOutput("reasoning_text")
-      )
-    ),
-
-    # Article body
-    card(
-      card_header("Article Body"),
-      card_body(
-        style = "max-height: 500px; overflow-y: auto;",
-        uiOutput("body_html")
+        div(
+          class = "mb-3",
+          layout_columns(
+            col_widths = c(4, 4, 4),
+            div(tags$strong("Date: "), textOutput("date_text", inline = TRUE)),
+            div(tags$strong("Source: "), textOutput("source_text", inline = TRUE)),
+            div(tags$strong("ID: "), textOutput("article_id_text", inline = TRUE))
+          )
+        ),
+        div(
+          style = "max-height: 500px; overflow-y: auto;",
+          uiOutput("body_html")
+        )
       )
     )
   )
@@ -302,7 +333,14 @@ server <- function(input, output, session) {
 
   # Reactive values
   decisions <- reactiveVal(load_decisions())
-  current_idx <- reactiveVal(1L)
+
+  # Start on first unreviewed article
+  init_idx <- {
+    decs <- load_decisions()
+    unreviewed <- which(!review_data$article_id %in% decs$article_id)
+    if (length(unreviewed) > 0) unreviewed[1] else 1L
+  }
+  current_idx <- reactiveVal(init_idx)
 
   # Filtered article indices
   filtered_indices <- reactive({
@@ -396,11 +434,8 @@ server <- function(input, output, session) {
 
   # --- Progress ---
   output$progress_text <- renderText({
-    decs <- decisions()
     fi <- filtered_indices()
-    n_decided <- sum(review_data$article_id[fi] %in% decs$article_id)
-    paste0("Showing ", length(fi), " of ", n_articles, " articles | ",
-           nrow(decs), " decided total")
+    paste0("Showing ", length(fi), " of ", n_articles, " articles")
   })
 
   # --- Navigation ---
@@ -459,25 +494,42 @@ server <- function(input, output, session) {
     persist_decisions(decs)
   })
 
-  # --- Save ---
-  observeEvent(input$save_btn, {
-    decs <- decisions()
-    save_decisions(decs)
-    n_filtered <- update_filtered_articles(decs)
-    showNotification(
-      paste0("Saved ", nrow(decs), " decisions. ",
-             "02_articles_filtered.json now has ", n_filtered, " articles."),
-      type = "message",
-      duration = 5
+  # --- Display outputs ---
+  output$article_id_text <- renderText(current_article()$article_id)
+
+  output$review_reason_ui <- renderUI({
+    reason <- current_article()$review_reason
+    cls <- switch(reason,
+      "Classification failed" = "bg-dark text-white",
+      "The LLM has low confidence in its assessment" = "text-white",
+      "The humans disagree with each other" = "text-white",
+      "The LLM and the humans disagree" = "text-white",
+      "The LLM has medium confidence (no human review available)" = "text-dark",
+      "text-dark"
+    )
+    bg_style <- switch(reason,
+      "Classification failed" = "",
+      "The LLM has low confidence in its assessment" = "background-color: #6f42c1;",
+      "The humans disagree with each other" = "background-color: #d63384;",
+      "The LLM and the humans disagree" = "background-color: #e35d00;",
+      "The LLM has medium confidence (no human review available)" = "background-color: #ffc870;",
+      "background-color: #adb5bd;"
+    )
+    tags$span(
+      class = paste("badge fs-6", cls),
+      style = bg_style,
+      icon("triangle-exclamation"),
+      reason
     )
   })
 
-  # --- Display outputs ---
-  output$article_id_text <- renderText({
-    art <- current_article()
+  output$article_position_text <- renderText({
     fi <- filtered_indices()
     pos <- match(current_idx(), fi)
-    paste0(art$article_id, "  (", pos, " / ", length(fi), ")")
+    decs <- decisions()
+
+    paste0("Article ", pos, " of ", length(fi), " | ",
+           nrow(decs), " decided total")
   })
 
   output$headline_text <- renderText(current_article()$article_headline)
@@ -508,12 +560,11 @@ server <- function(input, output, session) {
         parts <- c(parts, paste0(art$n_irrelevant, " not relevant"))
       if (!is.na(art$n_flagged) && art$n_flagged > 0)
         parts <- c(parts, paste0(art$n_flagged, " flagged"))
-      paste0(art$human_count, " coder(s): ", paste(parts, collapse = ", "),
-             " | ", art$coders)
+      paste0(art$human_count, " coder(s): ", paste(parts, collapse = ", "))
     }
   })
 
-  output$decision_badge <- renderUI({
+  render_decision_badge <- function() {
     dec <- current_decision()
     if (is.na(dec)) {
       tags$span(class = "badge bg-secondary fs-6", "Unreviewed")
@@ -522,7 +573,9 @@ server <- function(input, output, session) {
     } else {
       tags$span(class = "badge bg-danger fs-6", "\u2717 Not Relevant")
     }
-  })
+  }
+
+  output$decision_badge <- renderUI(render_decision_badge())
 
   output$reasoning_text <- renderText({
     r <- current_article()$reasoning

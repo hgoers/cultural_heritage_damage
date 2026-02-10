@@ -321,12 +321,104 @@ write(
 )
 cli::cli_alert_success("Wrote classification log for {nrow(classification_log)} articles to {.file {log_path}}")
 
-# 8b. Borderline cases for human review
-review_needed <- classification_log |>
-  filter(
-    reports_damage == TRUE & confidence %in% c("medium", "low") |
-    is.na(reports_damage)
+# 8b. Articles for human review (incorporating human coder comparisons)
+#
+# Review criteria:
+#   - LLM low confidence: always review, even if humans agree
+#   - Human coders disagree with each other (conflicting assessments)
+#   - LLM and human coders disagree on relevance
+#   - Classification failed (NA)
+#   - No human coding available: fall back to medium-confidence-relevant rule
+#
+# Exclusion: if LLM and humans agree, exclude even at medium confidence.
+
+human_coding_path <- file.path(project_root, "human-coding", "article_relevance.csv")
+
+if (file.exists(human_coding_path)) {
+  cli::cli_h3("Comparing LLM classifications with human coding")
+
+  human_coding <- read_csv(
+    human_coding_path,
+    col_types = cols(
+      article_id = col_character(),
+      article_header = col_character(),
+      evidence_of_attack = col_integer(),
+      summary_of_attack = col_character(),
+      coder = col_character(),
+      ldi = col_character()
+    ),
+    show_col_types = FALSE
   )
+
+  # Summarise human consensus per article headline
+  # evidence_of_attack: 1 = relevant, 0 = not relevant, -1 = unclear
+  human_summary <- human_coding |>
+    group_by(article_header) |>
+    summarise(
+      n_coders = n(),
+      n_relevant = sum(evidence_of_attack == 1, na.rm = TRUE),
+      n_irrelevant = sum(evidence_of_attack == 0, na.rm = TRUE),
+      n_flagged = sum(evidence_of_attack == -1, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    mutate(
+      human_decision = case_when(
+        n_relevant > 0 & n_irrelevant == 0 & n_flagged == 0 ~ "relevant",
+        n_irrelevant > 0 & n_relevant == 0 & n_flagged == 0 ~ "not_relevant",
+        n_relevant > 0 & n_irrelevant > 0 ~ "disagreement",
+        n_relevant > 0 & n_flagged > 0 ~ "disagreement",
+        n_irrelevant > 0 & n_flagged > 0 ~ "disagreement",
+        n_flagged > 0 ~ "flagged",
+        TRUE ~ NA_character_
+      )
+    )
+
+  classification_with_human <- classification_log |>
+    left_join(human_summary, by = c("article_headline" = "article_header"))
+
+  review_needed <- classification_with_human |>
+    filter(
+      # Failed classification
+      is.na(reports_damage) |
+      # LLM low confidence: always review, even if humans agree
+      confidence == "low" |
+      # Human coders disagree with each other (conflicting assessments)
+      (!is.na(human_decision) & human_decision == "disagreement") |
+      # LLM and humans explicitly disagree on relevance
+      (!is.na(reports_damage) & human_decision == "relevant" & reports_damage == FALSE) |
+      (!is.na(reports_damage) & human_decision == "not_relevant" & reports_damage == TRUE) |
+      # No clear human consensus available: fall back to medium-confidence rule
+      (!human_decision %in% c("relevant", "not_relevant", "disagreement") &
+       reports_damage == TRUE & confidence == "medium")
+    ) |>
+    select(all_of(names(classification_log)))
+
+  n_agree_excluded <- nrow(classification_with_human) - nrow(review_needed) -
+    sum(!is.na(classification_with_human$reports_damage) &
+        classification_with_human$confidence == "high" &
+        is.na(classification_with_human$human_decision), na.rm = TRUE)
+  n_disagree <- sum(
+    (!is.na(classification_with_human$reports_damage) &
+     classification_with_human$human_decision == "relevant" &
+     classification_with_human$reports_damage == FALSE) |
+    (!is.na(classification_with_human$reports_damage) &
+     classification_with_human$human_decision == "not_relevant" &
+     classification_with_human$reports_damage == TRUE),
+    na.rm = TRUE
+  )
+  n_human_disagree <- sum(classification_with_human$human_decision == "disagreement", na.rm = TRUE)
+
+  cli::cli_alert_info("{n_disagree} articles with LLM-human disagreement")
+  cli::cli_alert_info("{n_human_disagree} articles with inter-coder disagreement")
+} else {
+  cli::cli_alert_info("Human coding file not found; using confidence-only review criteria")
+  review_needed <- classification_log |>
+    filter(
+      is.na(reports_damage) |
+      confidence == "low" |
+      (reports_damage == TRUE & confidence == "medium")
+    )
+}
 
 if (nrow(review_needed) > 0) {
   review_path <- file.path(paths$data, "02_review_needed.json")
@@ -334,9 +426,9 @@ if (nrow(review_needed) > 0) {
     toJSON(review_needed, pretty = TRUE, auto_unbox = TRUE, na = "null"),
     review_path
   )
-  cli::cli_alert_warning("{nrow(review_needed)} borderline/failed cases written to {.file {review_path}} for human review")
+  cli::cli_alert_warning("{nrow(review_needed)} articles written to {.file {review_path}} for human review")
 } else {
-  cli::cli_alert_success("No borderline cases requiring review")
+  cli::cli_alert_success("No articles requiring review")
 }
 
 # 8c. Filtered articles (relevant only) — full article data for downstream steps
