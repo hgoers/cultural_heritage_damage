@@ -1,0 +1,10 @@
+name: cultural-heritage-review
+title:
+username: hgoers
+account: hgoers
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 16896605
+bundleId: 11706507
+url: https://hgoers.shinyapps.io/cultural-heritage-review/
+version: 1

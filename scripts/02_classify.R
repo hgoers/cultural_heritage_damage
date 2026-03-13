@@ -427,6 +427,20 @@ if (nrow(review_needed) > 0) {
     review_path
   )
   cli::cli_alert_warning("{nrow(review_needed)} articles written to {.file {review_path}} for human review")
+
+  # Slim artifact for review dashboard: review_needed + article_body only (faster deploy load)
+  articles_all_for_review <- fromJSON(file.path(paths$data, "01_articles.json"))
+  review_articles <- review_needed |>
+    left_join(
+      articles_all_for_review |> select(article_id, article_body),
+      by = "article_id"
+    )
+  review_articles_path <- file.path(paths$data, "02_review_articles.json")
+  write(
+    toJSON(review_articles, pretty = TRUE, auto_unbox = TRUE, na = "null"),
+    review_articles_path
+  )
+  cli::cli_alert_info("Wrote slim {.file {review_articles_path}} for dashboard")
 } else {
   cli::cli_alert_success("No articles requiring review")
 }
